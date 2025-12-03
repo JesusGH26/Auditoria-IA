@@ -1,9 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AuditReport, RiskLevel, AuditInputData } from "../types";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // Define the exact JSON schema we want Gemini to return
 const auditResponseSchema: Schema = {
   type: Type.OBJECT,
@@ -73,6 +70,25 @@ const auditResponseSchema: Schema = {
 };
 
 export const analyzeSecurityPlan = async (input: AuditInputData): Promise<AuditReport> => {
+  // Debugging logs
+  console.log("Iniciando análisis...");
+  
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    console.error("API Key is undefined");
+    throw new Error("Falta la API Key. Crea un archivo .env en la raíz con API_KEY=tu_clave y reinicia la terminal.");
+  }
+
+  if (apiKey.includes("PLACEHOLDER") || apiKey.length < 10) {
+     console.error("API Key is invalid placeholder");
+     throw new Error("La API Key configurada no es válida. Revisa tu archivo .env");
+  }
+
+  console.log("API Key detectada correctamente (longitud: " + apiKey.length + ")");
+
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+
   try {
     const modelId = "gemini-2.5-flash"; 
     
@@ -122,14 +138,18 @@ export const analyzeSecurityPlan = async (input: AuditInputData): Promise<AuditR
 
     const jsonText = response.text;
     if (!jsonText) {
-      throw new Error("No response generated from AI.");
+      throw new Error("La IA no generó respuesta (texto vacío).");
     }
 
     const report: AuditReport = JSON.parse(jsonText);
     return report;
 
-  } catch (error) {
-    console.error("Audit Service Error:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("Audit Service Error Detallado:", error);
+    // Extraer mensaje de error de Google si existe
+    const message = error.message || "Error desconocido en el servicio de auditoría";
+    if (message.includes("403")) throw new Error("Error de permisos (403): Tu API Key podría ser incorrecta o no tener acceso.");
+    if (message.includes("429")) throw new Error("Límite de cuota excedido (429): Has hecho demasiadas peticiones.");
+    throw new Error(message);
   }
 };
